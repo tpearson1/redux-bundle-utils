@@ -32,7 +32,26 @@ export interface ActionBundle<
 > {
   type: string;
   create: AppActionCreator<TActionCreatorArgs, TPayload>;
-  handler: AppActionHandler<TState, TPayload>;
+  handlers: { [type: string]: AppActionHandler<TState, TPayload> };
+}
+
+export function createGenericActionBundle<
+  TState,
+  TPayload,
+  TActionCreatorArgs extends any[]
+>(
+  type: string,
+  create: AppActionPayloadCreator<TPayload, TActionCreatorArgs>,
+  handlers: { [type: string]: AppActionHandler<TState, TPayload> }
+): ActionBundle<TState, TActionCreatorArgs, TPayload> {
+  return {
+    type,
+    create: (...args: TActionCreatorArgs): AppAction<TPayload> => ({
+      type,
+      payload: create(...args)
+    }),
+    handlers
+  };
 }
 
 export function createActionBundle<
@@ -44,14 +63,11 @@ export function createActionBundle<
   create: AppActionPayloadCreator<TPayload, TActionCreatorArgs>,
   handler: AppActionHandler<TState, TPayload>
 ): ActionBundle<TState, TActionCreatorArgs, TPayload> {
-  return {
+  return createGenericActionBundle<TState, TPayload, TActionCreatorArgs>(
     type,
-    create: (...args: TActionCreatorArgs): AppAction<TPayload> => ({
-      type,
-      payload: create(...args)
-    }),
-    handler
-  };
+    create,
+    { [type]: handler }
+  );
 }
 
 export function createSimpleActionBundle<TState>(
@@ -67,11 +83,13 @@ export function createSimpleActionBundle<TState>(
 
 export function createReducer<TState>(
   initialState: TState,
-  handlers: ActionBundle<TState, any, any>[]
+  bundles: ActionBundle<TState, any, any>[]
 ): Reducer<TState, any> {
   const handlerMap = new Map<string, AppActionHandler<TState, any>>();
-  handlers.forEach(handler => {
-    handlerMap.set(handler.type, handler.handler);
+  bundles.forEach(bundle => {
+    Object.keys(bundle.handlers).forEach(type => {
+      handlerMap.set(type, bundle.handlers[type]);
+    });
   });
 
   return function reducer(
